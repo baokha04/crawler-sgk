@@ -17,13 +17,17 @@ class Settings(BaseSettings):
     def sync_database_url(self) -> str:
         if self.DATABASE_URL:
             return self.DATABASE_URL
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        import urllib.parse
+        password = urllib.parse.quote_plus(self.POSTGRES_PASSWORD)
+        return f"postgresql://{self.POSTGRES_USER}:{password}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     @property
     def async_database_url(self) -> str:
         if self.DATABASE_URL:
             return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        import urllib.parse
+        password = urllib.parse.quote_plus(self.POSTGRES_PASSWORD)
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{password}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
