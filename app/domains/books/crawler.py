@@ -65,13 +65,15 @@ class SGKCrawler:
                 
                 for idx, img in enumerate(images):
                     src = await img.get_attribute("src")
-                    if src:
+                    if src and "cdn3.olm.vn" in src:
                         # We might have multiple images if it's double page, 
                         # but if we go #page=0, #page=1, it should work fine.
                         # We'll use p_num as the page identifier.
                         await self.book_service.add_page(book.id, p_num, src)
-                        print(f"Saved page {p_num} image.")
+                        print(f"Saved page {p_num} image from cdn3.olm.vn.")
                         break # Usually one main image per page in single view
+                else:
+                    print(f"No cdn3.olm.vn image found for page {p_num}.")
 
             await browser.close()
             print("Crawl completed.")
