@@ -48,8 +48,10 @@ class SGKCrawler:
 
             # We'll iterate through the pages. 
             # Since it's a hash-based navigation, we can just update the hash.
-            # We'll try to go page by page.
+            # We'll try to go page by odd page.
             for p_num in range(total_pages):
+                if p_num % 2 == 0: 
+                    continue
                 page_url = f"{url.split('#')[0]}#page={p_num}"
                 print(f"Processing page {p_num}...")
                 
@@ -63,17 +65,17 @@ class SGKCrawler:
                     # Try a more generic selector if needed
                     images = await page.query_selector_all("img[src*='data:image'], img[src*='blob']")
                 
-                for idx, img in enumerate(images):
+                for idx, img in enumerate(images[3:5]):
                     src = await img.get_attribute("src")
                     if src and "cdn3.olm.vn" in src:
                         # We might have multiple images if it's double page, 
                         # but if we go #page=0, #page=1, it should work fine.
                         # We'll use p_num as the page identifier.
-                        await self.book_service.add_page(book.id, p_num, src)
-                        print(f"Saved page {p_num} image from cdn3.olm.vn.")
-                        break # Usually one main image per page in single view
-                else:
-                    print(f"No cdn3.olm.vn image found for page {p_num}.")
+                        target_page = p_num + idx
+                        await self.book_service.add_page(book.id, target_page, src)
+                        print(f"Saved page {target_page} image from cdn3.olm.vn.")
+                    else:
+                        print(f"No cdn3.olm.vn image found for page {p_num}.")
 
             await browser.close()
             print("Crawl completed.")

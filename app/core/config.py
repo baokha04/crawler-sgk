@@ -7,11 +7,15 @@ class Settings(BaseSettings):
     
     # Database
     POSTGRES_SERVER: str = "localhost"
-    POSTGRES_USER: str = "admin"
-    POSTGRES_PASSWORD: str = "admin@654321"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "crawler_sgk"
     POSTGRES_PORT: int = 6432
     DATABASE_URL: Optional[str] = None
+
+    # LLM
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_MODEL_NAME: str = "gemini-1.5-flash"
 
     @property
     def sync_database_url(self) -> str:
