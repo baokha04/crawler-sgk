@@ -1,10 +1,11 @@
 import os
+import asyncio
 import google.generativeai as genai
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.core.config import settings
-from app.infrastructure.models import ProcessMarkdown
+from app.infrastructure.models import ProcessMarkdown, BookPage, OCRFail, OCRRateLimit
 from datetime import datetime
 import logging
 
@@ -60,6 +61,9 @@ Output the final result in clean Markdown code. Do not summarize or omit any inf
             await self.db.commit()
             await self.db.refresh(process_record)
 
+        # Always try to link to BookPage if not linked
+        await self._link_to_book_page(image_name, process_record.id)
+
         if process_record.status == "completed":
             return process_record
 
@@ -69,11 +73,120 @@ Output the final result in clean Markdown code. Do not summarize or omit any inf
             
             process_record.result_markdown = markdown_content
             process_record.status = "completed"
+            
+            # Link again after completion to be sure
+            await self._link_to_book_page(image_name, process_record.id)
+            
         except Exception as e:
-            logger.error(f"Failed to process {image_name}: {str(e)}")
+            error_msg = str(e)
+            logger.error(f"Failed to process {image_name}: {error_msg}")
             process_record.status = "failed"
-            process_record.result_markdown = str(e)
+            process_record.result_markdown = error_msg
+            
+            # Store failure in OCRFail table
+            fail_record = OCRFail(image_name=image_name, error_message=error_msg)
+            self.db.add(fail_record)
+            
+            await self.db.commit()
+            await self.db.refresh(process_record)
+            raise # Re-raise to stop process_all
         
         await self.db.commit()
         await self.db.refresh(process_record)
         return process_record
+
+    async def _link_to_book_page(self, image_name: str, process_id: int):
+        # image_path in DB is "download/filename"
+        image_path = f"download/{image_name}"
+        result = await self.db.execute(
+            select(BookPage).where(BookPage.image_path == image_path)
+        )
+        book_page = result.scalars().first()
+        if book_page and book_page.process_markdown_id != process_id:
+            book_page.process_markdown_id = process_id
+            self.db.add(book_page)
+
+    async def process_all_images(self) -> dict:
+        download_dir = "download"
+        if not os.path.exists(download_dir):
+            return {"status": "error", "message": "Download directory not found"}
+
+        # Get all image files
+        files = [f for f in os.listdir(download_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
+        processed_count = 0
+        skipped_count = 0
+        
+        for file_name in files:
+            # Check if already processed and linked
+            result = await self.db.execute(
+                select(ProcessMarkdown).where(ProcessMarkdown.image_name == file_name)
+            )
+            process_record = result.scalars().first()
+            
+            if process_record and process_record.status == "completed":
+                # Check if linked to BookPage
+                image_path = f"{download_dir}/{file_name}"
+                page_result = await self.db.execute(
+                    select(BookPage).where(BookPage.image_path == image_path)
+                )
+                book_page = page_result.scalars().first()
+                if book_page and book_page.process_markdown_id == process_record.id:
+                    skipped_count += 1
+                    continue
+            
+            try:
+                # Check rate limit before each processing
+                await self._check_rate_limit()
+                
+                await self.process_and_store(file_name)
+                processed_count += 1
+            except Exception as e:
+                # Stop processing on error as requested
+                return {
+                    "status": "failed",
+                    "message": f"Stopped due to error on {file_name}: {str(e)}",
+                    "processed_count": processed_count,
+                    "skipped_count": skipped_count
+                }
+        
+        return {
+            "status": "completed",
+            "processed_count": processed_count,
+            "skipped_count": skipped_count
+        }
+
+    async def _check_rate_limit(self):
+        # Use SELECT ... FOR UPDATE to handle concurrency
+        result = await self.db.execute(
+            select(OCRRateLimit).where(OCRRateLimit.id == 1).with_for_update()
+        )
+        rate_limit = result.scalars().first()
+        
+        now = datetime.utcnow()
+        if not rate_limit:
+            rate_limit = OCRRateLimit(id=1, current_count=1, window_start=now)
+            self.db.add(rate_limit)
+            await self.db.commit()
+            return
+
+        window_duration = (now - rate_limit.window_start).total_seconds()
+        
+        if window_duration >= 60:
+            # New window
+            rate_limit.current_count = 1
+            rate_limit.window_start = now
+        else:
+            if rate_limit.current_count < 15:
+                # Still within limit
+                rate_limit.current_count += 1
+            else:
+                # Limit reached, wait
+                wait_time = 60 - window_duration + 1.0 # Add a small buffer
+                logger.info(f"OCR rate limit reached (15/min). Waiting for {wait_time:.2f} seconds...")
+                await asyncio.sleep(wait_time)
+                # Reset after wait
+                rate_limit.current_count = 1
+                rate_limit.window_start = datetime.utcnow()
+        
+        self.db.add(rate_limit)
+        await self.db.commit()

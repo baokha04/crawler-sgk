@@ -23,6 +23,7 @@ class BookPage(Base):
     page_number = Column(Integer)
     image_url = Column(Text)
     image_path = Column(String)
+    process_markdown_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     book = relationship("Book", back_populates="pages")
@@ -35,3 +36,18 @@ class ProcessMarkdown(Base):
     result_markdown = Column(Text)
     status = Column(String, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class OCRFail(Base):
+    __tablename__ = "ocr_fail"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_name = Column(String, index=True)
+    error_message = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class OCRRateLimit(Base):
+    __tablename__ = "ocr_rate_limit"
+
+    id = Column(Integer, primary_key=True, index=True)
+    current_count = Column(Integer, default=0)
+    window_start = Column(DateTime, default=datetime.utcnow)

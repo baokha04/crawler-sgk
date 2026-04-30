@@ -18,6 +18,12 @@ class OCRResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class OCRBulkResponse(BaseModel):
+    status: str
+    message: Optional[str] = None
+    processed_count: int
+    skipped_count: int
+
 @router.post("/process/{image_name}", response_model=OCRResponse)
 async def process_image_to_markdown(
     image_name: str,
@@ -33,3 +39,11 @@ async def process_image_to_markdown(
         raise HTTPException(status_code=404, detail="Image file not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/process-all", response_model=OCRBulkResponse)
+async def process_all_images(
+    db: AsyncSession = Depends(get_db)
+):
+    ocr_service = OCRService(db)
+    result = await ocr_service.process_all_images()
+    return result
