@@ -12,8 +12,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
+    description="""
+    ## SGK Crawler API
+    A powerful API for crawling and managing Vietnamese textbook images.
+    
+    ### Features
+    * **Crawl Books**: Initiate background crawling of textbooks from source URLs.
+    * **Manage Books**: Retrieve information about crawled books and their pages.
+    * **Health Monitoring**: Check the status of the API and database.
+    """,
+    version="1.0.0",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    lifespan=lifespan
+    lifespan=lifespan,
+    contact={
+        "name": "Antigravity Dev Team",
+        "url": "https://github.com/baokha04/crawler-sgk",
+    },
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
