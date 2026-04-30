@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 6432
     DATABASE_URL: Optional[str] = None
 
+    # LLM
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_MODEL_NAME: str = "gemini-1.5-flash"
+
     @property
     def sync_database_url(self) -> str:
         if self.DATABASE_URL:

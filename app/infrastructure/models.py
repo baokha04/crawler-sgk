@@ -26,3 +26,12 @@ class BookPage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     book = relationship("Book", back_populates="pages")
+
+class ProcessMarkdown(Base):
+    __tablename__ = "process_markdown"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_name = Column(String, index=True, unique=True)
+    result_markdown = Column(Text)
+    status = Column(String, default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
