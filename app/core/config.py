@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     
     # Database
     POSTGRES_SERVER: str = "localhost"
-    POSTGRES_USER: str = "admin"
-    POSTGRES_PASSWORD: str = "admin@654321"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "crawler_sgk"
     POSTGRES_PORT: int = 6432
     DATABASE_URL: Optional[str] = None
