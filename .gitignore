@@ -1,8 +1,9 @@
 # Local environment
 .venv/
 __pycache__/
+*/__pycache__/
 .pytest_cache/
 # Project specific
 download/
 .agent/
-.env*
+.env
