@@ -23,6 +23,10 @@ class ConfigCreate(BaseModel):
     value: str
     active: bool = True
 
+class ConfigUpdate(BaseModel):
+    value: Optional[str] = None
+    active: Optional[bool] = None
+
 @router.get("/", response_model=List[ConfigSchema])
 async def list_configs(db: AsyncSession = Depends(get_db)):
     service = ConfigService(db)
@@ -40,3 +44,11 @@ async def get_active_config(key: str, db: AsyncSession = Depends(get_db)):
 async def set_config(config: ConfigCreate, db: AsyncSession = Depends(get_db)):
     service = ConfigService(db)
     return await service.set_config(config.key, config.value, config.active)
+
+@router.put("/{id}", response_model=ConfigSchema)
+async def update_config(id: int, config_in: ConfigUpdate, db: AsyncSession = Depends(get_db)):
+    service = ConfigService(db)
+    config = await service.update_config(id, config_in.value, config_in.active)
+    if not config:
+        raise HTTPException(status_code=404, detail="Config not found")
+    return config

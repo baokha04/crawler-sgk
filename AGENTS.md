@@ -9,8 +9,9 @@ This project uses `uv` for lightning-fast dependency management.
 | Task | Command |
 | :--- | :--- |
 | **Sync Dependencies** | `uv sync` |
-| **Dev Server** | `uv run uvicorn app.main:app --reload` |
-| **Run Tests** | `uv run pytest` |
+| **Dev Server** | `uv run dev` |
+| **Run Tests** | `uv run test` |
+| **Crawl Script** | `uv run crawl` |
 | **Docker Build** | `docker build -t crawler-sgk .` |
 | **Docker Compose** | `docker-compose up -d` |
 | **OCR Test Script** | `uv run python scripts/test_ocr.py` |
@@ -67,6 +68,14 @@ Managed via SQLAlchemy ORM. Default port: `6432`.
 - `id`: PK (Integer)
 - `current_count`: Integer
 - `window_start`: DateTime
+
+### `config` Table (Encrypted)
+- `id`: PK (Integer)
+- `key`: String (Index)
+- `value`: Text (3DES Encrypted)
+- `active`: Integer (0/1)
+- `created_at`: DateTime
+- `updated_at`: DateTime
 
 ## 🛠️ Code Style & Conventions
 

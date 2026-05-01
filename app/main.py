@@ -36,6 +36,9 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 async def root():
     return {"message": f"Welcome to {settings.PROJECT_NAME}"}
 
-if __name__ == "__main__":
+def dev():
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8001, reload=True)
+
+if __name__ == "__main__":
+    dev()
