@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: Optional[str] = None
     GEMINI_MODEL_NAME: str = "gemini-1.5-flash"
     
+    OPENROUTER_API_KEY: Optional[str] = None
+    DEFAULT_AI_PROVIDER: str = "google" # google or openrouter
+    OPENROUTER_MODEL_NAME: str = "google/gemini-2.0-flash-exp:free"
+    
     # Security
     DES3_KEY: str = "123456789012345678901234" # Must be 16 or 24 bytes
 

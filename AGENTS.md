@@ -101,7 +101,8 @@ graph TD
     Crawler --> Playwright[Playwright/Chromium]
     Playwright --> Website[Textbook Website]
     Crawler --> DB[(PostgreSQL)]
-    OCRService --> Gemma4[Gemma 4 / Gemini LLM]
+    OCRService --> Gemma4[Google Gemini LLM]
+    OCRService --> OpenRouter[OpenRouter / Multi-LLM]
     OCRService --> DB
     BookService --> Storage[Local File Storage]
     Storage --> DownloadDir[./download/]
@@ -113,7 +114,7 @@ graph TD
 ## 🔌 Internal APIs
 
 - `POST /api/v1/books/crawl`: Initiates a background crawl for a given URL.
-- `POST /api/v1/ocr/process/{image_name}`: Converts a downloaded image to high-fidelity Markdown using LLM.
-- `POST /api/v1/ocr/process-all`: Bulk processes all images in the `download/` folder with rate limiting (15/min).
+- `POST /api/v1/ocr/process/{image_name}`: Converts a downloaded image to high-fidelity Markdown using LLM. Supports optional `provider` and `model` query parameters.
+- `POST /api/v1/ocr/process-all`: Bulk processes all images in the `download/` folder with rate limiting (15/min). Supports optional `provider` and `model`.
 - `GET /api/v1/health`: Returns API and Database health status.
 - `GET /docs`: Interactive Swagger UI documentation.

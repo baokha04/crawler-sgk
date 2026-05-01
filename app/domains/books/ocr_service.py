@@ -9,6 +9,9 @@ from app.core.config import settings
 from app.infrastructure.models import ProcessMarkdown, BookPage, OCRFail, OCRRateLimit
 from datetime import datetime
 import logging
+import base64
+import httpx
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -16,37 +19,65 @@ class OCRService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.config_service = ConfigService(db)
-        self.model = None
+        self.provider = None
+        self.model_name = None
+        self.api_key = None
+        self.gemini_model = None # For Google provider
 
-    async def _ensure_configured(self):
-        if self.model:
-            return
+    async def _ensure_configured(self, provider: str = None, model: str = None):
+        # Load provider from config if not provided
+        if not provider:
+            provider = await self.config_service.get_active_config("ai_provider")
+        if not provider:
+            provider = settings.DEFAULT_AI_PROVIDER
+        
+        self.provider = provider
 
-        api_key = await self.config_service.get_active_config("google_api_key")
-        model_name = await self.config_service.get_active_config("ai_model")
+        if provider == "google":
+            api_key = await self.config_service.get_active_config("google_api_key")
+            if not api_key:
+                api_key = settings.GOOGLE_API_KEY
+            
+            if not model:
+                model = await self.config_service.get_active_config("ai_model")
+            if not model:
+                model = settings.GEMINI_MODEL_NAME
+            
+            self.model_name = model
+            self.api_key = api_key
 
-        if not api_key:
-            api_key = settings.GOOGLE_API_KEY
-        if not model_name:
-            model_name = settings.GEMINI_MODEL_NAME
-
-        if api_key:
-            genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel(model_name)
+            if api_key:
+                genai.configure(api_key=api_key)
+                self.gemini_model = genai.GenerativeModel(model)
+            else:
+                logger.warning("GOOGLE_API_KEY not found. OCR will not work.")
+                raise ValueError("Google API Key not configured.")
+        
+        elif provider == "openrouter":
+            api_key = await self.config_service.get_active_config("openrouter_api_key")
+            if not api_key:
+                api_key = settings.OPENROUTER_API_KEY
+            
+            if not model:
+                # For openrouter, we might still check 'ai_model' config key if it's set specifically for openrouter
+                model = await self.config_service.get_active_config("ai_model")
+            if not model:
+                model = settings.OPENROUTER_MODEL_NAME
+            
+            self.model_name = model
+            self.api_key = api_key
+            
+            if not api_key:
+                logger.warning("OPENROUTER_API_KEY not found. OCR will not work.")
+                raise ValueError("OpenRouter API Key not configured.")
         else:
-            logger.warning("GOOGLE_API_KEY not found in config or environment. OCR will not work.")
-            raise ValueError("Google API Key not configured.")
+            raise ValueError(f"Unsupported AI provider: {provider}")
 
-    async def convert_image_to_markdown(self, image_path: str) -> str:
-        await self._ensure_configured()
-        if not self.model:
-            raise ValueError("Gemini model not configured. Check GOOGLE_API_KEY.")
-
+    async def convert_image_to_markdown(self, image_path: str, provider: str = None, model: str = None) -> str:
+        await self._ensure_configured(provider, model)
+        
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Image not found at {image_path}")
-
-        # Load image
-        img = Image.open(image_path)
 
         prompt = """
 Please perform high-fidelity OCR on this image and convert the content into structured Markdown format. The content contains Vietnamese, so pay close attention to diacritics and special characters to ensure 100% accuracy in spelling.
@@ -59,13 +90,82 @@ Output the final result in clean Markdown code. Do not summarize or omit any inf
         """.strip()
 
         try:
-            response = self.model.generate_content([prompt, img])
-            return response.text
+            if self.provider == "google":
+                return await self._ocr_google(image_path, prompt)
+            elif self.provider == "openrouter":
+                return await self._ocr_openrouter(image_path, prompt)
         except Exception as e:
-            logger.error(f"Error during Gemini OCR: {str(e)}")
+            logger.error(f"Error during {self.provider} OCR: {str(e)}")
             raise
 
-    async def process_and_store(self, image_name: str) -> ProcessMarkdown:
+    async def _ocr_google(self, image_path: str, prompt: str) -> str:
+        if not self.gemini_model:
+            raise ValueError("Gemini model not configured.")
+        
+        img = Image.open(image_path)
+        response = self.gemini_model.generate_content([prompt, img])
+        return response.text
+
+    async def _ocr_openrouter(self, image_path: str, prompt: str) -> str:
+        if not self.api_key:
+            raise ValueError("OpenRouter API key not configured.")
+
+        base64_image = self._encode_image(image_path)
+        mime_type = self._get_mime_type(image_path)
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                content=json.dumps({
+                    "model": self.model_name,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": prompt
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{mime_type};base64,{base64_image}"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                })
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
+            
+            data = response.json()
+            if "choices" not in data or len(data["choices"]) == 0:
+                raise Exception(f"Invalid response from OpenRouter: {data}")
+            
+            return data["choices"][0]["message"]["content"]
+
+    def _encode_image(self, image_path: str) -> str:
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode('utf-8')
+
+    def _get_mime_type(self, image_path: str) -> str:
+        ext = os.path.splitext(image_path)[1].lower()
+        if ext in ['.jpg', '.jpeg']:
+            return 'image/jpeg'
+        if ext == '.png':
+            return 'image/png'
+        if ext == '.webp':
+            return 'image/webp'
+        return 'image/jpeg' # Default
+
+    async def process_and_store(self, image_name: str, provider: str = None, model: str = None) -> ProcessMarkdown:
         # Check if already exists
         result = await self.db.execute(
             select(ProcessMarkdown).where(ProcessMarkdown.image_name == image_name)
@@ -86,7 +186,7 @@ Output the final result in clean Markdown code. Do not summarize or omit any inf
 
         try:
             image_path = os.path.join("download", image_name)
-            markdown_content = await self.convert_image_to_markdown(image_path)
+            markdown_content = await self.convert_image_to_markdown(image_path, provider, model)
             
             process_record.result_markdown = markdown_content
             process_record.status = "completed"
@@ -123,7 +223,7 @@ Output the final result in clean Markdown code. Do not summarize or omit any inf
             book_page.process_markdown_id = process_id
             self.db.add(book_page)
 
-    async def process_all_images(self) -> dict:
+    async def process_all_images(self, provider: str = None, model: str = None) -> dict:
         download_dir = "download"
         if not os.path.exists(download_dir):
             return {"status": "error", "message": "Download directory not found"}
@@ -155,7 +255,7 @@ Output the final result in clean Markdown code. Do not summarize or omit any inf
                 # Check rate limit before each processing
                 await self._check_rate_limit()
                 
-                await self.process_and_store(file_name)
+                await self.process_and_store(file_name, provider, model)
                 processed_count += 1
             except Exception as e:
                 # Stop processing on error as requested

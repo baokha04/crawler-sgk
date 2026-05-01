@@ -8,21 +8,23 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from app.infrastructure.database import init_db, AsyncSessionLocal
 from app.domains.books.ocr_service import OCRService
 
-async def test_ocr():
+async def test_ocr(provider: str = None, model: str = None):
     print("Initializing database...")
-    await init_db()
+    try:
+        await init_db()
+    except Exception as e:
+        print(f"Warning: DB initialization failed (might be ok if using env vars): {e}")
     
     image_name = "book_1_page_10.jpg"
-    print(f"Testing OCR for {image_name}...")
+    print(f"Testing OCR for {image_name} using {provider or 'default'} provider...")
     
     async with AsyncSessionLocal() as db:
         ocr_service = OCRService(db)
         try:
-            # We already have a record from the previous run, let's just fetch it or re-run
-            record = await ocr_service.process_and_store(image_name)
+            record = await ocr_service.process_and_store(image_name, provider=provider, model=model)
             print(f"Status: {record.status}")
             if record.status == "completed":
-                output_file = "test_ocr_result.md"
+                output_file = f"test_ocr_result_{provider or 'default'}.md"
                 with open(output_file, "w", encoding="utf-8") as f:
                     f.write(record.result_markdown)
                 print(f"Success! Result written to {output_file}")
@@ -32,4 +34,10 @@ async def test_ocr():
             print(f"Failed with exception: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(test_ocr())
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--provider", help="AI Provider (google or openrouter)")
+    parser.add_argument("--model", help="AI Model name")
+    args = parser.parse_args()
+    
+    asyncio.run(test_ocr(provider=args.provider, model=args.model))

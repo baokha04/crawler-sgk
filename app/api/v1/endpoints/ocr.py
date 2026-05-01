@@ -27,11 +27,13 @@ class OCRBulkResponse(BaseModel):
 @router.post("/process/{image_name}", response_model=OCRResponse)
 async def process_image_to_markdown(
     image_name: str,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     ocr_service = OCRService(db)
     try:
-        record = await ocr_service.process_and_store(image_name)
+        record = await ocr_service.process_and_store(image_name, provider=provider, model=model)
         if record.status == "failed":
             raise HTTPException(status_code=500, detail=f"OCR failed: {record.result_markdown}")
         return record
@@ -42,8 +44,10 @@ async def process_image_to_markdown(
 
 @router.post("/process-all", response_model=OCRBulkResponse)
 async def process_all_images(
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     ocr_service = OCRService(db)
-    result = await ocr_service.process_all_images()
+    result = await ocr_service.process_all_images(provider=provider, model=model)
     return result
