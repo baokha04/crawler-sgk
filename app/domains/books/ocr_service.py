@@ -4,6 +4,7 @@ import google.generativeai as genai
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from app.domains.config.service import ConfigService
 from app.core.config import settings
 from app.infrastructure.models import ProcessMarkdown, BookPage, OCRFail, OCRRateLimit
 from datetime import datetime
@@ -14,14 +15,30 @@ logger = logging.getLogger(__name__)
 class OCRService:
     def __init__(self, db: AsyncSession):
         self.db = db
-        if settings.GOOGLE_API_KEY:
-            genai.configure(api_key=settings.GOOGLE_API_KEY)
-            self.model = genai.GenerativeModel(settings.GEMINI_MODEL_NAME)
+        self.config_service = ConfigService(db)
+        self.model = None
+
+    async def _ensure_configured(self):
+        if self.model:
+            return
+
+        api_key = await self.config_service.get_active_config("google_api_key")
+        model_name = await self.config_service.get_active_config("ai_model")
+
+        if not api_key:
+            api_key = settings.GOOGLE_API_KEY
+        if not model_name:
+            model_name = settings.GEMINI_MODEL_NAME
+
+        if api_key:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel(model_name)
         else:
-            self.model = None
-            logger.warning("GOOGLE_API_KEY not set. OCR will not work.")
+            logger.warning("GOOGLE_API_KEY not found in config or environment. OCR will not work.")
+            raise ValueError("Google API Key not configured.")
 
     async def convert_image_to_markdown(self, image_path: str) -> str:
+        await self._ensure_configured()
         if not self.model:
             raise ValueError("Gemini model not configured. Check GOOGLE_API_KEY.")
 

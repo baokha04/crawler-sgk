@@ -51,3 +51,13 @@ class OCRRateLimit(Base):
     id = Column(Integer, primary_key=True, index=True)
     current_count = Column(Integer, default=0)
     window_start = Column(DateTime, default=datetime.utcnow)
+
+class Config(Base):
+    __tablename__ = "config"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, index=True)
+    value = Column(Text)
+    active = Column(Integer, default=1) # Using Integer (0/1) for compatibility if needed, or Boolean
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
