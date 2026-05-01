@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "crawler-sgk"
 version = "0.1.0"
@@ -21,7 +25,16 @@ dependencies = [
     "pycryptodome>=3.21.0",
 ]
 
+[tool.uv]
+package = true
+
+[tool.setuptools]
+packages = ["app"]
+
 [dependency-groups]
 dev = [
     "pytest-asyncio>=1.3.0",
 ]
+
+[project.scripts]
+dev = "app.main:dev"

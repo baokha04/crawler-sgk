@@ -47,3 +47,21 @@ class ConfigService:
     async def list_configs(self) -> List[Config]:
         result = await self.db.execute(select(Config).order_by(Config.key, Config.created_at.desc()))
         return result.scalars().all()
+
+    async def update_config(self, config_id: int, value: Optional[str] = None, active: Optional[bool] = None) -> Optional[Config]:
+        result = await self.db.execute(select(Config).where(Config.id == config_id))
+        config = result.scalars().first()
+        if not config:
+            return None
+        
+        if value is not None:
+            config.value = encrypt_3des(value)
+        if active is not None:
+            if active and config.active == 0:
+                await self.deactivate_all(config.key)
+            config.active = 1 if active else 0
+            
+        config.updated_at = datetime.utcnow()
+        await self.db.commit()
+        await self.db.refresh(config)
+        return config

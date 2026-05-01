@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+app/__init__.py
+app/main.py
+crawler_sgk.egg-info/PKG-INFO
+crawler_sgk.egg-info/SOURCES.txt
+crawler_sgk.egg-info/dependency_links.txt
+crawler_sgk.egg-info/entry_points.txt
+crawler_sgk.egg-info/requires.txt
+crawler_sgk.egg-info/top_level.txt
+tests/test_main.py
